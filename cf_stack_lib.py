@@ -35,6 +35,7 @@ LOCAL_STORAGE_FILE_PATH = os.path.expanduser('~') + '/.' + APPLICATION_NAME
 def get_iam_user(session):
 
     iam_user = session.client('iam').get_user()
+    very_important_variable = 100
     return iam_user['User']['UserName']
 
 # ------------------------------------------------------------------------------------
