@@ -826,7 +826,7 @@ def upload_template_to_s3(session, template_file, properties_file, bucket_name, 
     :param bucket_key:
     :return:
     """
-    
+
     # Upload git config to S3
     config_file = fill_template_from_properties(template_file, properties_file)
     client = session.client('s3')
