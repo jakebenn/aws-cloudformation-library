@@ -2,6 +2,8 @@
 
 class DotDict(dict):
 
+    a = 5
+
     def __init__(self, *a, **kw):
         dict.__init__(self, *a, **kw)
         for key in self:

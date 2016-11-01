@@ -35,14 +35,19 @@ LOCAL_STORAGE_FILE_PATH = os.path.expanduser('~') + '/.' + APPLICATION_NAME
 def get_iam_user(session):
 
     iam_user = session.client('iam').get_user()
-    very_important_variable = 100
     return iam_user['User']['UserName']
 
-# ------------------------------------------------------------------------------------
 
-
-# This function gets an MFA token from the user and returns an MFA-authenticated session
 def get_mfa_session(session, region):
+
+    """
+    This function gets a (Multi-Factor Authentication (MFA) token from the user via the command line and returns an
+    MFA-authenticated session.
+    :param session: A existing, non-MFA authenticated session. You first need to establish a plain old session before
+                    getting an MFA session.
+    :param region: The AWS region
+    :return: A session object
+    """
 
     done = False
     mfa_totp = None
@@ -83,8 +88,6 @@ def get_mfa_session(session, region):
             aws_session_token=temp_credentials['Credentials']['SessionToken']
     )
 
-# ------------------------------------------------------------------------------------
-
 
 def get_account_number(session):
 
@@ -92,10 +95,15 @@ def get_account_number(session):
     arn = iam_user['User']['Arn']
     return arn[13:25]
 
-# ------------------------------------------------------------------------------------
-
 
 def get_aws_session(key_file_path, region):
+
+    """
+    Establishes a connection to AWS given a CSV file containing access key and secret key.
+    :param key_file_path: The path to the .CSV key file containing the key
+    :param region: The AWS region
+    :return: A session object
+    """
 
     if key_file_path:
         # Parse AWS key file
@@ -108,8 +116,6 @@ def get_aws_session(key_file_path, region):
         return boto3.session.Session(access_key, secret_key, region_name=region)
     else:
         return boto3
-
-# ------------------------------------------------------------------------------------
 
 
 def get_param_from_user(input_text, validation_function, invalid_text, default_value=None):
@@ -128,11 +134,14 @@ def get_param_from_user(input_text, validation_function, invalid_text, default_v
             else:
                 return param.strip()
 
-# ------------------------------------------------------------------------------------
 
-
-# Gets a name/value pair saved locally on the user's computer.
 def get_local_var(var_name_searched):
+
+    """
+    Gets a name/value pair saved locally on the user's computer. Uses variable storage created using this library.
+    :param var_name_searched: Name of the variable to lookup
+    :return: The value of the variable, or None if it is not found.
+    """
 
     if not os.path.isfile(LOCAL_STORAGE_FILE_PATH):
         return None
@@ -145,12 +154,15 @@ def get_local_var(var_name_searched):
 
     return None
 
-# ------------------------------------------------------------------------------------
 
-
-# Saves a name/value pair locally on the user's computer
 def save_local_var(var_name_searched, new_value):
 
+    """
+    Saves a name/value pair locally on the user's computer
+    :param var_name_searched:
+    :param new_value:
+    :return:
+    """
     var_updated = False
 
     # Create temp file
@@ -184,8 +196,6 @@ def save_local_var(var_name_searched, new_value):
     move(abs_path, LOCAL_STORAGE_FILE_PATH)
 
     return
-
-# ------------------------------------------------------------------------------------
 
 
 def get_file_input(file_description, default_file, local_var_name):
@@ -222,8 +232,6 @@ def get_file_input(file_description, default_file, local_var_name):
     save_local_var(local_var_name, the_file)
 
     return the_file
-
-# ------------------------------------------------------------------------------------
 
 
 def attach_iam_policy_to_ci_server(session, microservice, policy_arn):
@@ -268,8 +276,6 @@ def attach_iam_policy_to_ci_server(session, microservice, policy_arn):
                 PolicyArn=policy_arn
         )
 
-# ----------------------------------------------------------------------------------
-
 
 def create_policy(session, iam_policy_name, account_number, policy_body, policy_description):
 
@@ -289,16 +295,12 @@ def create_policy(session, iam_policy_name, account_number, policy_body, policy_
 
     return
 
-# ------------------------------------------------------------------------------------
-
 
 def policy_exists(client, policy_name):
 
     iam_policies = client.list_policies(Scope='Local')
     policy_names = [p['PolicyName'] for p in iam_policies['Policies']]
     return policy_name in policy_names
-
-# ------------------------------------------------------------------------------------
 
 
 def delete_policy(session, account_number, policy_name):
@@ -338,13 +340,9 @@ def delete_policy(session, account_number, policy_name):
         print(str(e))
         sys.exit(55)
 
-# ------------------------------------------------------------------------------------
-
 
 def get_policy_arn(account_number, policy_name):
     return 'arn:aws:iam::' + account_number + ':policy/' + policy_name
-
-# ------------------------------------------------------------------------------------
 
 
 def wait_for_stack_to_complete(session, stack_id):
@@ -401,8 +399,6 @@ def wait_for_stack_to_complete(session, stack_id):
 
     return stack_outputs
 
-# ------------------------------------------------------------------------------------
-
 
 def stack_exists(session, stack_name):
 
@@ -414,8 +410,6 @@ def stack_exists(session, stack_name):
         return False
 
     return True
-
-# ------------------------------------------------------------------------------------
 
 
 def delete_line_from_file(file_path, text_to_search):
@@ -431,8 +425,6 @@ def delete_line_from_file(file_path, text_to_search):
     the_file = open(file_path, 'w')
     the_file.writelines(output)
     the_file.close()
-
-# ------------------------------------------------------------------------------------
 
 
 def wait_for_volume_to_complete(session, volume_id):
@@ -478,8 +470,6 @@ def wait_for_volume_to_complete(session, volume_id):
 
     return
 
-# ------------------------------------------------------------------------------------
-
 
 def create_volume(session, volume_name, volume_size_gb, availability_zone, microservice, build_env):
 
@@ -522,11 +512,16 @@ def create_volume(session, volume_name, volume_size_gb, availability_zone, micro
 
     return volume_id
 
-# ------------------------------------------------------------------------------------
 
-
-# Returns the id of volume given the Name tag value. Returns None if volume doesn't exist.
 def get_volume_id(session, volume_name):
+
+    """
+    Returns the id of volume given the Name tag value. Returns None if volume doesn't exist.
+    :param session:
+    :param volume_name:
+    :return:
+    """
+
     client = session.client('ec2')
 
     response = client.describe_volumes(
@@ -547,8 +542,6 @@ def get_volume_id(session, volume_name):
     else:
         return response['Volumes'][0]['VolumeId']
 
-# ------------------------------------------------------------------------------------
-
 
 def delete_volume(session, volume_name):
 
@@ -560,11 +553,15 @@ def delete_volume(session, volume_name):
         client.delete_volume(VolumeId=volume_id)
         wait_for_volume_to_complete(session, volume_id)
 
-# ------------------------------------------------------------------------------------
 
-
-# Gets a subnet's availability zone based on subnet ID. Returns None if not subnet exists with the ID.
 def get_subnet_az(session, subnet_id):
+
+    """
+    Gets a subnet's availability zone based on subnet ID. Returns None if not subnet exists with the ID.
+    :param session:
+    :param subnet_id:
+    :return:
+    """
 
     client = session.client('ec2')
 
@@ -577,12 +574,15 @@ def get_subnet_az(session, subnet_id):
     return response['Subnets'][0]['AvailabilityZone']
 
 
-# ------------------------------------------------------------------------------------
-
-
-# This function creates a new key pair and ensures that there is only one key pair active for a microservice
-# at any one-time. If an existing key pair exists (for just this microservice) then it will be deleted first.
 def get_microservice_key_pair(session, microservice):
+
+    """
+    This function creates a new key pair and ensures that there is only one key pair active for a microservice
+    at any one-time. If an existing key pair exists (for just this microservice) then it will be deleted first.
+    :param session:
+    :param microservice:
+    :return:
+    """
 
     # Does a key pair exist for this microservice?
     # Loop through EC2 instances and get key pairs in-use from the EC2 tag
@@ -660,12 +660,16 @@ def get_microservice_key_pair(session, microservice):
     return existing_keys_pairs[0]
 
 
-# ------------------------------------------------------------------------------------
-
-
-# This function returns the IDs of EC2 using the key pair designated for this microservice, but are not themselves
-# part of this microservice.
 def get_rogue_instances_using_keypair(session, key_pair, microservice):
+
+    """
+    This function returns the IDs of EC2 using the key pair designated for this microservice, but are not themselves
+    part of this microservice.
+    :param session:
+    :param key_pair:
+    :param microservice:
+    :return:
+    """
 
     client = session.client('ec2')
     response = client.describe_instances(
@@ -709,8 +713,6 @@ def get_rogue_instances_using_keypair(session, key_pair, microservice):
 
     return rogue_instances
 
-# ------------------------------------------------------------------------------------
-
 
 def create_key_pair(session, local_key_dir, microservice):
 
@@ -731,8 +733,6 @@ def create_key_pair(session, local_key_dir, microservice):
 
     return key_name
 
-# ------------------------------------------------------------------------------------
-
 
 def fill_template_from_dict(template_path, variable_value_dict):
 
@@ -747,8 +747,6 @@ def fill_template_from_dict(template_path, variable_value_dict):
         template_body += line
 
     return template_body
-
-# ------------------------------------------------------------------------------------
 
 
 def fill_template_from_properties(template_path, properties_file_path):
@@ -776,8 +774,6 @@ def fill_template_from_properties(template_path, properties_file_path):
 
     return template_body
 
-# ------------------------------------------------------------------------------------
-
 
 def empty_bucket(session, bucket_name):
 
@@ -802,23 +798,35 @@ def empty_bucket(session, bucket_name):
         else:
             raise
 
-# ------------------------------------------------------------------------------------
 
-
-# Uploads a stack file to S3
 def upload_file_to_s3(session, file_path, bucket_name, bucket_key):
+
+    """
+    Uploads a stack file to S3
+    :param session:
+    :param file_path:
+    :param bucket_name:
+    :param bucket_key:
+    :return:
+    """
 
     # Upload private key to S3
     s3 = session.resource('s3')
     s3.meta.client.upload_file(file_path, bucket_name, bucket_key)
 
 
-# ------------------------------------------------------------------------------------
-
-
-# Uploads a template file to s3 that contains variables that should be replaced with values defined in a properties file
 def upload_template_to_s3(session, template_file, properties_file, bucket_name, bucket_key):
 
+    """
+    Uploads a template file to s3 that contains variables that should be replaced with values defined in a properties file
+    :param session:
+    :param template_file:
+    :param properties_file:
+    :param bucket_name:
+    :param bucket_key:
+    :return:
+    """
+    
     # Upload git config to S3
     config_file = fill_template_from_properties(template_file, properties_file)
     client = session.client('s3')
