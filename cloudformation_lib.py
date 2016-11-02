@@ -6,7 +6,7 @@
 #          designed to be used in scripts that control the creation and deletion of AWS stacks using CloudFormation.
 #
 #
-# Version: 0.2.0
+# Version: 0.3.0
 #
 # Command-line arguments: None
 #
@@ -26,6 +26,7 @@ import subprocess
 
 APPLICATION_NAME = 'myapp'
 LOCAL_STORAGE_FILE_PATH = os.path.expanduser('~') + '/.' + APPLICATION_NAME
+
 
 # =================================================================================
 # ========= FUNCTIONS
@@ -120,6 +121,14 @@ def get_aws_session(key_file_path, region):
 
 def get_param_from_user(input_text, validation_function, invalid_text, default_value=None):
 
+    """
+    A helper function that receives input for a single parameter from a user via the command line interactively.
+    :param input_text: The text displayed to the user
+    :param validation_function: A validation function used to check the values of the user input.
+    :param invalid_text: The text displayed to the user if the input is invalid.
+    :param default_value: A default value for the parameter, if the user doesn't specify a value.
+    :return: The value of the user input if it's valid, or nothing if it's not.
+    """
     done = False
 
     while not done:
@@ -133,6 +142,8 @@ def get_param_from_user(input_text, validation_function, invalid_text, default_v
                 print(invalid_text)
             else:
                 return param.strip()
+
+    return
 
 
 def get_local_var(var_name_searched):
@@ -159,16 +170,16 @@ def save_local_var(var_name_searched, new_value):
 
     """
     Saves a name/value pair locally on the user's computer
-    :param var_name_searched:
-    :param new_value:
-    :return:
+    :param var_name_searched: Name of the variable to be updated
+    :param new_value: The new value for the variable
+    :return: Nothing
     """
     var_updated = False
 
     # Create temp file
     file_handle, abs_path = mkstemp()
 
-    # Create a temp file
+    # Work with the temp file resource
     with open(abs_path, 'w+') as new_file:
 
         # If the local storage file already exists, loop through it and update the variable
@@ -200,14 +211,26 @@ def save_local_var(var_name_searched, new_value):
 
 def get_file_input(file_description, default_file, local_var_name):
 
-    # Get the  file
-    chars_from_right = 40
+    """
+    A helper function that receives input for a file location parameter from the user via the command line
+    interactively. This function also stores the last file location entered by the user, and uses this as the default.
+    :param file_description: Description of the file location parameter.
+    :param default_file: Path to properties file used to remember default values. Specify None for the default file.
+    :param local_var_name: Name of the file location parameter
+    :return:
+    """
+
+    chars_from_right = 40  # The number of characters to display of the file path to the user.
     pos_from_right = chars_from_right * -1
+
+    # Get the path to the file parameter from the local property file
     last_file = get_local_var(local_var_name)
 
+    # If there isn't a saved value for this parameter, and the caller specified a default value, use the default.
     if not last_file and default_file:
         last_file = default_file
 
+    # Determine the correct the prompt for the user, based on whether or not we have a default value.
     if not last_file:
         default_file_text = "[Required]"
         default_file = None
@@ -218,66 +241,36 @@ def get_file_input(file_description, default_file, local_var_name):
         default_file_text = '[' + last_file[pos_from_right:] + ']'
         default_file = last_file
 
+    # Get the file path parameter from the user, interactively.
     the_file = get_param_from_user(
             'Location of ' + file_description + ' ' + default_file_text + ': ',
             lambda param: len(param) > 5,
             'The file location you entered is not valid.',
             default_file)
 
+    # Clean up the file path
     if the_file[:2] == '~/':
         the_file = the_file.replace('~/', os.path.expanduser('~') + '/')
     elif the_file[:2] == './':
         the_file = the_file.replace('./', os.path.dirname(os.path.realpath(__file__)) + '/')
 
+    # Save the file path for this parameter in the local properties file
     save_local_var(local_var_name, the_file)
 
     return the_file
 
 
-def attach_iam_policy_to_ci_server(session, microservice, policy_arn):
-    time.sleep(10)
-    client = session.client('ec2')
-
-    # Get all of the EC2 instances that implement the CI Server microservice.
-    response = client.describe_instances(
-
-            Filters=[
-                {
-                    'Name': 'tag:Microservice',
-                    'Values': [microservice]
-                },
-                {
-                    'Name': 'instance-state-name',
-                    'Values':  ['running']
-                }
-            ]
-    )
-
-    # Get the EC2 Instance Profiles for each CI Server Instance. The Instance Profile attaches the
-    # IAM Role to the EC2 Instance
-    instances_profiles = []
-    for reservation in response['Reservations']:
-        for instance in reservation['Instances']:
-            instances_profiles.append(instance['IamInstanceProfile']['Arn'])
-
-    # Make the list of instance profiles unique
-    instances_profiles = list(set(instances_profiles))
-
-    # Loop through the instance profiles, get the associated IAM role, and attach the policy to it.
-    iam = session.client('iam')
-    for profile_arn in instances_profiles:
-        friendly_profile_name = profile_arn[profile_arn.find("/")+1:]
-        instance_profile = iam.get_instance_profile(InstanceProfileName=friendly_profile_name)
-        instance_role = instance_profile['InstanceProfile']['Roles'][0]['RoleName']
-
-        # Attach the proxy IAM policy to EC2 Instance Profile Role
-        iam.attach_role_policy(
-                RoleName=instance_role,
-                PolicyArn=policy_arn
-        )
-
-
 def create_policy(session, iam_policy_name, account_number, policy_body, policy_description):
+
+    """
+    Creates an IAM policy directly, outside of CloudFormation, using the AWS SDK
+    :param session: An AWS session object
+    :param iam_policy_name: IAM policy name
+    :param account_number: AWS account number
+    :param policy_body: The JSON body of the IAM policy
+    :param policy_description: Short description of the policy
+    :return: Nothing
+    """
 
     iam = session.client('iam')
 
@@ -304,6 +297,14 @@ def policy_exists(client, policy_name):
 
 
 def delete_policy(session, account_number, policy_name):
+
+    """
+    Deletes an IAM policy after confirming that it exists in the first place.
+    :param session: AWS session object
+    :param account_number: AWS account number
+    :param policy_name: IAM policy name to delete
+    :return:
+    """
 
     client = session.client('iam')
     policy_arn = get_policy_arn(account_number, policy_name)
@@ -347,6 +348,16 @@ def get_policy_arn(account_number, policy_name):
 
 def wait_for_stack_to_complete(session, stack_id):
 
+    """
+    This function polls AWS to check the status of a stack operation (e.g. create, delete). It returns when the
+    stack is in one of several completed states (which could be a successful or unsuccessful completion). This function
+    should be called after a stack operation has been initiated to ensure the operation is complete before the
+    script continues.
+    :param session: AWS session object
+    :param stack_id: The Stack ID of the stack
+    :return: The output of the stack operations. E.g. The output parameters for the create stack operation.
+    """
+
     stack_outputs = None
     max_wait_secs = 10 * 60  # 10 minutes
     sleep_time_secs = 1
@@ -362,11 +373,14 @@ def wait_for_stack_to_complete(session, stack_id):
     in_progress_statuses = ['CREATE_IN_PROGRESS', 'DELETE_IN_PROGRESS', 'UPDATE_IN_PROGRESS',
                             'UPDATE_COMPLETE_CLEANUP_IN_PROGRESS']
 
+    # Keep polling AWS to check on the status of the stack, until a terminal condition has been reached.
     while not done:
 
+        # Make sure the stack exists in the first place.
         if not stack_exists(session, stack_id):
             return
 
+        # Get the latest status
         try:
             response = client.describe_stacks(StackName=stack_id)
             stack_status = response['Stacks'][0]['StackStatus']
@@ -374,6 +388,7 @@ def wait_for_stack_to_complete(session, stack_id):
             if 'does not exist' in str(e):
                 return
 
+        # Handle the status appropriate. If it's in-progress, display the status to the user.
         if stack_status in successfully_completed_statuses:
             done = True
             if 'Outputs' in response['Stacks'][0]:
@@ -429,6 +444,14 @@ def delete_line_from_file(file_path, text_to_search):
 
 def wait_for_volume_to_complete(session, volume_id):
 
+    """
+    This function polls AWS to check the status of an EBS volume operation to complete, and displays the current
+    status to the end user.
+    :param session: AWS session object
+    :param volume_id: The ID of the EBS volume
+    :return:
+    """
+
     max_wait_secs = 60 * 5  # 10 minutes
     sleep_time_secs = 1
     max_iterations = max_wait_secs / sleep_time_secs
@@ -472,6 +495,17 @@ def wait_for_volume_to_complete(session, volume_id):
 
 
 def create_volume(session, volume_name, volume_size_gb, availability_zone, microservice, build_env):
+
+    """
+    Creates an EBS volume, and tags the volume with name of the microservice and build environment it's associated with.
+    :param session: AWS session object
+    :param volume_name: Name of the EBS volume
+    :param volume_size_gb: Size of the volume in GB
+    :param availability_zone: The availability zone of the EBS
+    :param microservice: The name of the associated microservice (used for a tag)
+    :param build_env: The name of the build environment (used for a tag)
+    :return: EBS Volume ID
+    """
 
     # If volume already exists, then exit function. We don't want to create another one.
     volume_id = get_volume_id(session, volume_name)
@@ -517,8 +551,8 @@ def get_volume_id(session, volume_name):
 
     """
     Returns the id of volume given the Name tag value. Returns None if volume doesn't exist.
-    :param session:
-    :param volume_name:
+    :param session: AWS session object
+    :param volume_name: EBS volume name
     :return:
     """
 
@@ -558,9 +592,9 @@ def get_subnet_az(session, subnet_id):
 
     """
     Gets a subnet's availability zone based on subnet ID. Returns None if not subnet exists with the ID.
-    :param session:
-    :param subnet_id:
-    :return:
+    :param session: AWS session object
+    :param subnet_id: Subnet ID
+    :return: Subnet's availability zone
     """
 
     client = session.client('ec2')
@@ -579,8 +613,8 @@ def get_microservice_key_pair(session, microservice):
     """
     This function creates a new key pair and ensures that there is only one key pair active for a microservice
     at any one-time. If an existing key pair exists (for just this microservice) then it will be deleted first.
-    :param session:
-    :param microservice:
+    :param session: AWS session object
+    :param microservice: Microservice name
     :return:
     """
 
@@ -600,7 +634,7 @@ def get_microservice_key_pair(session, microservice):
             ]
     )
 
-    # If there are no running instances, then let's get the key pair name the AWS Key pairs
+    # If there are no running instances, then let's get the key pair name from the AWS Key pairs
     if len(response['Reservations']) == 0:
         response = client.describe_key_pairs(
                 Filters=[
@@ -663,11 +697,13 @@ def get_microservice_key_pair(session, microservice):
 def get_rogue_instances_using_keypair(session, key_pair, microservice):
 
     """
-    This function returns the IDs of EC2 using the key pair designated for this microservice, but are not themselves
-    part of this microservice.
-    :param session:
-    :param key_pair:
-    :param microservice:
+    This function returns the IDs of EC2 instance using the key pair designated for this microservice, but are not
+    themselves part of this microservice. The function is used internally to enforce a rule that each microservice
+    should have its own key pair, and that each key pair should ONLY be used be instances that arre part
+    of that microservice.
+    :param session: AWS session object
+    :param key_pair: Key pair name
+    :param microservice: Associated microservice name
     :return:
     """
 
@@ -736,6 +772,16 @@ def create_key_pair(session, local_key_dir, microservice):
 
 def fill_template_from_dict(template_path, variable_value_dict):
 
+    """
+    Creates an IAM policy body by injecting dictionary variables into an IAM policy template containing variable
+    placeholders to enable parameterized IAM policies. E.g. If the IAM policy template contains the placeholder
+    ${My_Variable_Name}, and the function is passed a dictionary object with the key My_Variable_Name, then this
+    function will replace ${My_Variable_Name} in the IAM template with the value of the dictionary item My_Variable_Name
+    :param template_path: Path to the IAM policy template file
+    :param variable_value_dict: The dictionary containing the variables and values to inject into the template
+    :return: A string representing the IAM policy with variables injected.
+    """
+
     template_body = ''
     replacement_variables = [key for key in variable_value_dict]
 
@@ -750,6 +796,17 @@ def fill_template_from_dict(template_path, variable_value_dict):
 
 
 def fill_template_from_properties(template_path, properties_file_path):
+
+    """
+    Creates an IAM policy body by injecting property file variables into an IAM policy template containing variable
+    placeholders to enable parameterized IAM policies. E.g. If the IAM policy template contains the placeholder
+    ${My_Variable_Name}, and the property file contains a property My_Variable_Name, then this function will replace
+    ${My_Variable_Name} in the IAM template with the value of the property My_Variable_Name.
+    :param template_path: Path to the IAM policy template file
+    :param properties_file_path: Path to the property file containing the variables and values to inject into the
+    template.
+    :return: A string representing the IAM policy with variables injected.
+    """
 
     template_body = ''
     variables = {}
@@ -777,6 +834,12 @@ def fill_template_from_properties(template_path, properties_file_path):
 
 def empty_bucket(session, bucket_name):
 
+    """
+    Removes the contents of an S3 bucket
+    :param session: AWS session object
+    :param bucket_name: Name of the bucket to empty
+    :return: Nothing
+    """
     client = session.client('s3')
 
     # Check if the bucket exists
@@ -803,10 +866,10 @@ def upload_file_to_s3(session, file_path, bucket_name, bucket_key):
 
     """
     Uploads a stack file to S3
-    :param session:
-    :param file_path:
-    :param bucket_name:
-    :param bucket_key:
+    :param session: AWS session object
+    :param file_path: Path to the file to upload
+    :param bucket_name: Name of the bucket
+    :param bucket_key: S3 file path/key for the object
     :return:
     """
 
@@ -818,13 +881,14 @@ def upload_file_to_s3(session, file_path, bucket_name, bucket_key):
 def upload_template_to_s3(session, template_file, properties_file, bucket_name, bucket_key):
 
     """
-    Uploads a template file to s3 that contains variables that should be replaced with values defined in a properties file
-    :param session:
-    :param template_file:
-    :param properties_file:
-    :param bucket_name:
-    :param bucket_key:
-    :return:
+    Uploads a template file to s3 that contains variables that should be replaced with values defined in
+    a properties file.
+    :param session: AWS session
+    :param template_file: Path to file template
+    :param properties_file: Path to properties file
+    :param bucket_name: Name of S3 bucket
+    :param bucket_key: S3 file path/key for the object
+    :return: Nothing
     """
 
     # Upload git config to S3
