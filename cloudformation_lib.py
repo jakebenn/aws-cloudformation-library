@@ -55,7 +55,7 @@ def get_mfa_session(session, region):
 
     # Get the Multi-Factor Authentication (MFA) Time-based One Time Password (TOTP)
     while not done:
-        mfa_totp = raw_input("Enter Multi-Factor Authentication Code: ")
+        mfa_totp = input("Enter Multi-Factor Authentication Code: ")
 
         if (len(mfa_totp) != 6) and (not mfa_totp.isdigit()):
             print('This is not a valid MFA code. Please try again or leave blank to exit.\n')
@@ -132,7 +132,7 @@ def get_param_from_user(input_text, validation_function, invalid_text, default_v
     done = False
 
     while not done:
-        param = raw_input(input_text)
+        param = input(input_text)
         if (not param) and default_value:
             return default_value
         elif (not param) and (not default_value):
@@ -336,7 +336,7 @@ def delete_policy(session, account_number, policy_name):
     # Delete policy
     try:
         client.delete_policy(PolicyArn=policy_arn)
-    except Exception, e:
+    except Exception as e:
         # If there are IAM groups or users attached to this policy, then an error will be thrown.
         print(str(e))
         sys.exit(55)
@@ -384,7 +384,7 @@ def wait_for_stack_to_complete(session, stack_id):
         try:
             response = client.describe_stacks(StackName=stack_id)
             stack_status = response['Stacks'][0]['StackStatus']
-        except ClientError, e:
+        except ClientError as e:
             if 'does not exist' in str(e):
                 return
 
@@ -468,7 +468,7 @@ def wait_for_volume_to_complete(session, volume_id):
         try:
             response = client.describe_volumes(VolumeIds=[volume_id])
             status = response['Volumes'][0]['State']
-        except ClientError, e:
+        except ClientError as e:
             if 'does not exist.' in str(e):
                 return
 
@@ -854,7 +854,7 @@ def empty_bucket(session, bucket_name):
         if 'Contents' in response:
             for obj in response['Contents']:
                 client.delete_object(Bucket=bucket_name, Key=obj['Key'])
-    except ClientError, e:
+    except ClientError as e:
         if 'The specified bucket does not exist' in str(e):
             # A strange condition occurs sometimes when the bucket exists, but errors out when something is put into it
             return
